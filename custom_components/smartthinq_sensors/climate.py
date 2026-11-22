@@ -273,7 +273,7 @@ class LGEACClimate(LGEClimate):
         return self._device.target_temperature_step
 
     @property
-    def temperature_unit(self) -> str:
+    def native_temperature_unit(self) -> str:
         """Return the unit of measurement used by the platform."""
         if self._device.temperature_unit == TemperatureUnit.FAHRENHEIT:
             return UnitOfTemperature.FAHRENHEIT
@@ -350,7 +350,7 @@ class LGEACClimate(LGEClimate):
         return [PRESET_NONE] + list(modes.values())
 
     @property
-    def current_temperature(self) -> float:
+    def native_current_temperature(self) -> float:
         """Return the current temperature."""
         return self._api.state.current_temp
 
@@ -359,7 +359,7 @@ class LGEACClimate(LGEClimate):
         return self._api.state.device_features.get(AirConditionerFeatures.HUMIDITY)
 
     @property
-    def target_temperature(self) -> float:
+    def native_target_temperature(self) -> float:
         """Return the temperature we try to reach."""
         return self._api.state.target_temp
 
@@ -455,6 +455,12 @@ class LGEACClimate(LGEClimate):
         """Call the set sleep time command for AC devices."""
         await self._device.set_reservation_sleep_time(sleep_time)
 
+    # Older Core versions read the original temperature properties.
+    if not hasattr(ClimateEntity, "native_temperature_unit"):
+        temperature_unit = native_temperature_unit
+        current_temperature = native_current_temperature
+        target_temperature = native_target_temperature
+
 
 class LGERefrigeratorClimate(LGEClimate):
     """Refrigerator climate device."""
@@ -488,7 +494,7 @@ class LGERefrigeratorClimate(LGEClimate):
         return self._wrap_device.device.target_temperature_step
 
     @property
-    def temperature_unit(self) -> str:
+    def native_temperature_unit(self) -> str:
         """Return the unit of measurement used by the platform."""
         if self._api.state:
             unit = self._api.state.temp_unit
@@ -496,7 +502,7 @@ class LGERefrigeratorClimate(LGEClimate):
         return UnitOfTemperature.CELSIUS
 
     @property
-    def target_temperature(self) -> float | None:
+    def native_target_temperature(self) -> float | None:
         """Return the temperature we try to reach."""
         target_temp = self.entity_description.temp_fn(self._wrap_device)
         if target_temp is None:
@@ -521,3 +527,8 @@ class LGERefrigeratorClimate(LGEClimate):
     def max_temp(self) -> float:
         """Return the maximum temperature."""
         return self.entity_description.range_temp_fn(self._wrap_device)[1]
+
+    # Older Core versions read the original temperature properties.
+    if not hasattr(ClimateEntity, "native_temperature_unit"):
+        temperature_unit = native_temperature_unit
+        target_temperature = native_target_temperature

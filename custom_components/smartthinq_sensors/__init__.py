@@ -703,19 +703,10 @@ def cleanup_orphan_lge_devices(
     device_registry = dr.async_get(hass)
     all_lg_dev_entries = dr.async_entries_for_config_entry(device_registry, entry_id)
 
-    # get list of valid devices
-    valid_reg_dev_ids = []
-    for device_id in valid_dev_ids:
-        dev = device_registry.async_get_device({(DOMAIN, device_id)})
-        if dev is not None:
-            valid_reg_dev_ids.append(dev.id)
-
-    # clean-up invalid devices
+    valid_identifiers = {(DOMAIN, device_id) for device_id in valid_dev_ids}
     for dev_entry in all_lg_dev_entries:
-        dev_id = dev_entry.id
-        if dev_id in valid_reg_dev_ids:
-            continue
-        device_registry.async_remove_device(dev_id)
+        if dev_entry.identifiers.isdisjoint(valid_identifiers):
+            device_registry.async_remove_device(dev_entry.id)
 
 
 @callback

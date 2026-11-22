@@ -141,7 +141,7 @@ class LGEWHWaterHeater(LGEWaterHeater):
         return self._supported_features
 
     @property
-    def temperature_unit(self) -> str:
+    def native_temperature_unit(self) -> str:
         """Return the unit of measurement used by the platform."""
         if self._device.temperature_unit == TemperatureUnit.FAHRENHEIT:
             return UnitOfTemperature.FAHRENHEIT
@@ -187,12 +187,12 @@ class LGEWHWaterHeater(LGEWaterHeater):
         await self.async_set_operation_mode(STATE_OFF)
 
     @property
-    def current_temperature(self) -> float | None:
+    def native_current_temperature(self) -> float | None:
         """Return the current temperature."""
         return self._api.state.device_features.get(WaterHeaterFeatures.HOT_WATER_TEMP)
 
     @property
-    def target_temperature(self) -> float | None:
+    def native_target_temperature(self) -> float | None:
         """Return the temperature we try to reach."""
         return self._api.state.target_temp
 
@@ -209,6 +209,12 @@ class LGEWHWaterHeater(LGEWaterHeater):
         if (max_value := self._device.target_temperature_max) is not None:
             return max_value
         return self._device.conv_temp_unit(WH_MAX_TEMP)
+
+    # Older Core versions read the original temperature properties.
+    if not hasattr(WaterHeaterEntity, "native_temperature_unit"):
+        temperature_unit = native_temperature_unit
+        current_temperature = native_current_temperature
+        target_temperature = native_target_temperature
 
 
 class LGEACWaterHeater(LGEWaterHeater):
@@ -227,7 +233,7 @@ class LGEACWaterHeater(LGEWaterHeater):
         # self._attr_precision = self._device.hot_water_target_temperature_step
 
     @property
-    def temperature_unit(self) -> str:
+    def native_temperature_unit(self) -> str:
         """Return the unit of measurement used by the platform."""
         if self._device.temperature_unit == TemperatureUnit.FAHRENHEIT:
             return UnitOfTemperature.FAHRENHEIT
@@ -264,14 +270,14 @@ class LGEACWaterHeater(LGEWaterHeater):
         await self.async_set_operation_mode(STATE_OFF)
 
     @property
-    def current_temperature(self) -> float | None:
+    def native_current_temperature(self) -> float | None:
         """Return the current temperature."""
         return self._api.state.device_features.get(
             AirConditionerFeatures.HOT_WATER_TEMP
         )
 
     @property
-    def target_temperature(self) -> float | None:
+    def native_target_temperature(self) -> float | None:
         """Return the temperature we try to reach."""
         return self._api.state.hot_water_target_temp
 
@@ -288,3 +294,9 @@ class LGEACWaterHeater(LGEWaterHeater):
         if (max_value := self._device.hot_water_target_temperature_max) is not None:
             return max_value
         return self._device.conv_temp_unit(AWHP_MAX_TEMP)
+
+    # Older Core versions read the original temperature properties.
+    if not hasattr(WaterHeaterEntity, "native_temperature_unit"):
+        temperature_unit = native_temperature_unit
+        current_temperature = native_current_temperature
+        target_temperature = native_target_temperature

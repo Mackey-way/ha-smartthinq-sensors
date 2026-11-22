@@ -44,7 +44,7 @@ def _async_get_diagnostics(
     if device:
         lg_device_id = next(iter(device.identifiers))[1]
 
-    devs_data = _async_devices_as_dict(hass, lg_device_id)
+    devs_data = _async_devices_as_dict(hass, entry.entry_id, lg_device_id)
     diag_data[LGE_DEVICES] = devs_data
 
     if device:
@@ -67,11 +67,16 @@ def _async_get_diagnostics(
 
 @callback
 def _async_devices_as_dict(
-    hass: HomeAssistant, lg_device_id: str | None = None
+    hass: HomeAssistant, entry_id: str, lg_device_id: str | None = None
 ) -> dict:
     """Represent a LGE devices as a dictionary."""
 
     lge_devices = hass.data[DOMAIN].get(LGE_DEVICES, {})
+    registered = {
+        identifier: device
+        for device in dr.async_entries_for_config_entry(dr.async_get(hass), entry_id)
+        for identifier in device.identifiers
+    }
     devs_data = {}
     for dev_type, devices in lge_devices.items():
         lge_devs = {}
@@ -87,7 +92,7 @@ def _async_devices_as_dict(
                 "model_info": device.model_info.as_dict(),
                 "device_status": device.status.as_dict if device.status else None,
                 "home_assistant": _async_device_ha_info(
-                    hass, device.device_info.device_id
+                    hass, registered.get((DOMAIN, device.device_info.device_id))
                 ),
             }
             if lg_device_id:
@@ -100,12 +105,12 @@ def _async_devices_as_dict(
 
 
 @callback
-def _async_device_ha_info(hass: HomeAssistant, lg_device_id: str) -> dict | None:
+def _async_device_ha_info(
+    hass: HomeAssistant, hass_device: dr.DeviceEntry | None
+) -> dict | None:
     """Gather information how this ThinQ device is represented in Home Assistant."""
 
-    device_registry = dr.async_get(hass)
     entity_registry = er.async_get(hass)
-    hass_device = device_registry.async_get_device(identifiers={(DOMAIN, lg_device_id)})
     if not hass_device:
         return None
 
