@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import timedelta
+from datetime import datetime, timedelta
 import logging
 
 from homeassistant.components import persistent_notification
@@ -28,7 +28,7 @@ from homeassistant.helpers.dispatcher import (
     async_dispatcher_send,
 )
 from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.event import async_call_later, async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
@@ -250,6 +250,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             language,
         )
 
+    def schedule_setup_retry() -> None:
+        """Keep the scan interval available while waiting for LG to recover."""
+
+        @callback
+        def retry_setup(_now: datetime) -> None:
+            hass.config_entries.async_schedule_reload(entry.entry_id)
+
+        entry.async_on_unload(async_call_later(hass, timedelta(minutes=5), retry_setup))
+
     def _update_clientid_callback(client_id: str) -> None:
         """Update config entry with the new client id."""
         hass.config_entries.async_update_entry(
@@ -284,13 +293,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.warning(
                 "Connection not available. ThinQ platform not ready", exc_info=exc
             )
-        # Keep the entry loaded so the number entity is usable and the user
-        # can adjust scan_interval; reload the entry once LG is reachable.
+        schedule_setup_retry()
         return True
 
     if not client.has_devices:
-        _LOGGER.error("No ThinQ devices found. Component setup aborted")
-        return False
+        await client.close()
+        if log_info:
+            _LOGGER.warning("No ThinQ devices found; retrying in five minutes")
+        schedule_setup_retry()
+        return True
 
     _LOGGER.debug("ThinQ client connected")
 
@@ -304,23 +315,34 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 "Connection not available. ThinQ platform not ready", exc_info=exc
             )
         await client.close()
+        schedule_setup_retry()
         return True
 
     if discovered_devices is None:
         await client.close()
-        _LOGGER.warning("ThinQ platform not ready: no devices found")
+        if log_info:
+            _LOGGER.warning("ThinQ device list unavailable; retrying in five minutes")
+        schedule_setup_retry()
         return True
 
     # remove device not available anymore
     dev_ids = [v for ids in discovered_devices.values() for v in ids]
     cleanup_orphan_lge_devices(hass, entry.entry_id, dev_ids)
 
-    async def _async_call_reload_entry():
+    reload_pending = False
+
+    @callback
+    def _async_call_reload_entry() -> None:
         """Reload current entry."""
-        if SIGNAL_RELOAD_ENTRY in hass.data[DOMAIN]:
+        nonlocal reload_pending
+        if reload_pending:
             return
+        reload_pending = True
         hass.data[DOMAIN][SIGNAL_RELOAD_ENTRY] = 1
-        await hass.config_entries.async_reload(entry.entry_id)
+        handle = hass.loop.call_soon(
+            hass.config_entries.async_schedule_reload, entry.entry_id
+        )
+        entry.async_on_unload(handle.cancel)
 
     entry.async_on_unload(
         async_dispatcher_connect(hass, SIGNAL_RELOAD_ENTRY, _async_call_reload_entry)
